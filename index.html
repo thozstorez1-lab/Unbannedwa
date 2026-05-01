@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Unban WA - Thoz Store</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+        button { background-color: #25D366; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 20px; }
+        button:disabled { background-color: #ccc; }
+        #status { margin-top: 15px; color: #555; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Unban WA Otomatis</h2>
+        <p>Klik tombol di bawah untuk login dan mengirim email banding secara otomatis.</p>
+        
+        <button id="auth_btn" style="display: none;">Mulai Proses Banding</button>
+        <p id="status">Menyiapkan sistem API...</p>
+    </div>
+
+    <!-- Google API Scripts -->
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+    <script type="text/javascript">
+        // KONFIGURASI (Ganti dengan data dari Google Cloud Console)
+        const CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com'; 
+        const API_KEY = 'YOUR_API_KEY_HERE';
+        const SCOPES = 'https://www.googleapis.com/auth/gmail.send';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest'],
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', 
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('auth_btn').style.display = 'inline-block';
+                document.getElementById('status').innerText = "Sistem Siap.";
+            }
+        }
+
+        async function sendUnbanEmail() {
+            document.getElementById('status').innerText = "Mengirim email banding...";
+            
+            // Format email (Header + Isi)
+            const emailContent = [
+                'To: support@support.whatsapp.com\r\n',
+                'Subject: Akun Terblokir - Mohon Peninjauan Kembali\r\n',
+                'Content-Type: text/plain; charset="UTF-8"\r\n\r\n',
+                'Halo Tim Dukungan WhatsApp,\r\n\r\n',
+                'Nomor saya baru saja diblokir. Saya yakin ini adalah kesalahan teknis karena saya tidak melanggar ketentuan layanan. Mohon bantuannya untuk memulihkan akun saya.\r\n\r\n',
+                'Terima kasih.'
+            ].join('');
+
+            // Encode ke Base64 aman untuk URL
+            const encodedMail = btoa(unescape(encodeURIComponent(emailContent)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+
+            try {
+                await gapi.client.gmail.users.messages.send({
+                    'userId': 'me',
+                    'resource': { 'raw': encodedMail }
+                });
+                document.getElementById('status').innerText = "BERHASIL! Email telah terkirim ke WhatsApp Support.";
+            } catch (err) {
+                document.getElementById('status').innerText = "Error: " + err.result.error.message;
+            }
+        }
+
+        document.getElementById('auth_btn').onclick = () => {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) throw (resp);
+                sendUnbanEmail();
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        };
+    </script>
+</body>
+</html>
